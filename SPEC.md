@@ -260,3 +260,4 @@ Además, ajustes manuales por mes (concepto + importe positivo o negativo: adela
 - **28/10/2026:** la fecha escrita en el mensaje ("15/8") manda sobre la fecha de envío; varios mensajes del mismo día se juntan.
 - **28/10/2026:** modelo por defecto `claude-sonnet-5-5` (más preciso con abreviaturas; el coste por mes sigue siendo de céntimos).
 - **28/10/2026:** si el chat se exportó desde el móvil del repartidor (el archivo lleva el nombre del dueño), el repartidor toma el nombre de su remitente.
+- **28/10/2026:** la IA responde con salida estructurada (`output_config.format` json_schema) en vez de tool use forzado, porque Sonnet 5.5 no admite `tool_choice` de tipo tool/any.

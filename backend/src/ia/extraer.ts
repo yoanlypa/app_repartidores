@@ -55,39 +55,38 @@ Otras reglas:
 - nota: en español y muy breve; solo si hay algo que aclarar. Déjala vacía si todo está claro.
 - NO sumes ni calcules totales del mes.`;
 
-const HERRAMIENTA: Anthropic.Tool = {
-  name: 'guardar_dias',
-  description: 'Guarda la salida, los entregados y las incidencias de cada día.',
-  input_schema: {
-    type: 'object',
-    properties: {
-      dias: {
-        type: 'array',
-        items: {
-          type: 'object',
-          properties: {
-            fecha: { type: 'string', description: 'AAAA-MM-DD del día de trabajo' },
-            salida: { type: ['integer', 'null'], description: 'Paquetes con los que salió' },
-            entregados: { type: ['integer', 'null'], description: 'Paquetes entregados (lo que se paga)' },
-            incidencias: { type: ['integer', 'null'], description: 'Paquetes no entregados' },
-            confianza: { type: 'string', enum: ['alta', 'baja'] },
-            nota: { type: 'string' },
-            mensaje_original: { type: 'string' },
-          },
-          required: ['fecha', 'salida', 'entregados', 'incidencias', 'confianza', 'nota', 'mensaje_original'],
+/** Formato de salida estructurada (JSON garantizado por la API). */
+const ESQUEMA = {
+  type: 'object',
+  properties: {
+    dias: {
+      type: 'array',
+      items: {
+        type: 'object',
+        properties: {
+          fecha: { type: 'string', description: 'AAAA-MM-DD del día de trabajo' },
+          salida: { type: ['integer', 'null'], description: 'Paquetes con los que salió' },
+          entregados: { type: ['integer', 'null'], description: 'Paquetes entregados (lo que se paga)' },
+          incidencias: { type: ['integer', 'null'], description: 'Paquetes no entregados' },
+          confianza: { type: 'string', enum: ['alta', 'baja'] },
+          nota: { type: 'string' },
+          mensaje_original: { type: 'string' },
         },
+        required: ['fecha', 'salida', 'entregados', 'incidencias', 'confianza', 'nota', 'mensaje_original'],
+        additionalProperties: false,
       },
     },
-    required: ['dias'],
   },
+  required: ['dias'],
+  additionalProperties: false,
 };
 
 export function formatearMensajes(mensajes: Mensaje[]): string {
   return mensajes.map((m) => `[enviado ${m.fechaHora.slice(0, 10)} ${m.fechaHora.slice(11, 16)}] ${m.texto.replace(/\n/g, ' / ')}`).join('\n');
 }
 
-export function crearExtractorAnthropic(opciones: { apiKey: string; modelo: string }): Extractor {
-  const cliente = new Anthropic({ apiKey: opciones.apiKey, maxRetries: 2, timeout: 90_000 });
+export function crearExtractorAnthropic(opciones: { apiKey: string; modelo: string; fetch?: typeof fetch }): Extractor {
+  const cliente = new Anthropic({ apiKey: opciones.apiKey, maxRetries: 2, timeout: 120_000, fetch: opciones.fetch });
 
   return async ({ repartidor, mes, mensajes }) => {
     if (mensajes.length === 0) return [];
@@ -99,10 +98,9 @@ export function crearExtractorAnthropic(opciones: { apiKey: string; modelo: stri
       try {
         r = await cliente.messages.create({
           model: opciones.modelo,
-          max_tokens: 8000,
+          max_tokens: 16000,
           system: INSTRUCCIONES,
-          tools: [HERRAMIENTA],
-          tool_choice: { type: 'tool', name: HERRAMIENTA.name, disable_parallel_tool_use: true },
+          output_config: { format: { type: 'json_schema', schema: ESQUEMA } },
           messages: [
             {
               role: 'user',
@@ -113,11 +111,23 @@ export function crearExtractorAnthropic(opciones: { apiKey: string; modelo: stri
       } catch (e) {
         const err = e as { status?: number; message?: string };
         if (err.status === 401) throw new ErrorIa('La clave de la IA no es válida. Revisa ANTHROPIC_API_KEY.');
+        if (err.status === 404) throw new ErrorIa(`El modelo "${opciones.modelo}" no existe. Revisa ANTHROPIC_MODEL.`);
         if (err.status === 429) throw new ErrorIa('La IA está saturada ahora mismo. Inténtalo en unos minutos.');
         throw new ErrorIa(`No se pudo contactar con la IA: ${err.message ?? 'error desconocido'}`);
       }
-      const bloque = r.content.find((b): b is Anthropic.ToolUseBlock => b.type === 'tool_use');
-      const datos = Respuesta.safeParse(bloque?.input);
+      if (r.stop_reason === 'max_tokens') {
+        ultimoError = 'respuesta cortada';
+        continue;
+      }
+      const texto = r.content.find((b): b is Anthropic.TextBlock => b.type === 'text')?.text ?? '';
+      let json: unknown = null;
+      try {
+        json = JSON.parse(texto);
+      } catch {
+        ultimoError = 'no es JSON';
+        continue;
+      }
+      const datos = Respuesta.safeParse(json);
       if (datos.success) return datos.data.dias;
       ultimoError = datos.error.issues.slice(0, 3).map((i) => `${i.path.join('.')}: ${i.message}`).join('; ');
     }
