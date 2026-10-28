@@ -44,6 +44,17 @@ Fechas:
 - Si un día tiene varios mensajes (por la mañana la salida y por la noche los entregados), júntalos en un solo resultado.
 - Si hay una corrección ("perdona, eran 118"), usa el último dato y explícalo en "nota".
 
+Casos que hay que interpretar bien:
+- "Ok entregados todos" + "14 el 14/8" → salida 14, entregados 14, incidencias 0 ("todos" = todo lo que llevaba).
+- "Salida 14 entrega 9, no conté uno que entregué sin querer, dejé 4 inc al compañero" → el repartidor se corrige: entregados 10 (9 + 1 que no contó), incidencias 4, salida 14. Explícalo en "nota".
+- "20 salida 10 entregados 10 info" → "info" también son incidencias: salida 20, entregados 10, incidencias 10.
+- "Te dejo 3 inc que me quedaron" ese día → incidencias 3 de ese día.
+- Por la mañana "Salida 20 26/8" y por la noche "Entreg 18" (sin fecha) → los dos son del día 26: salida 20, entregados 18.
+- "Entreg 13 paq 27/8" enviado el 28 → es del día 27, aunque se enviara el 28.
+- "hoy" = el día del envío.
+- Ignora números que no son paquetes: DNI o NIE (por ejemplo 12345678Z), códigos de verificación, teléfonos, direcciones, horas y duraciones de llamadas.
+- Si el repartidor da cifras de memoria o con duda ("creo que fueron 10", "no lo tengo"), confianza "baja".
+
 Confianza:
 - "alta" si los entregados están claros.
 - "baja" si no sabes cuántos entregó, si los números se contradicen o si no está claro a qué día pertenece.
