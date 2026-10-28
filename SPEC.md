@@ -261,3 +261,6 @@ Además, ajustes manuales por mes (concepto + importe positivo o negativo: adela
 - **28/10/2026:** modelo por defecto `claude-sonnet-5-5` (más preciso con abreviaturas; el coste por mes sigue siendo de céntimos).
 - **28/10/2026:** si el chat se exportó desde el móvil del repartidor (el archivo lleva el nombre del dueño), el repartidor toma el nombre de su remitente.
 - **28/10/2026:** la IA responde con salida estructurada (`output_config.format` json_schema) en vez de tool use forzado, porque Sonnet 5.5 no admite `tool_choice` de tipo tool/any.
+- **28/10/2026:** el Resumen es una tabla días (lunes a sábado; los domingos solo si tienen datos) × repartidores, con la cifra de entregados en cada casilla, columna final de notas y fila fija de totales con lo que hay que pagar. Tocar una casilla abre el detalle para corregir o apuntar el día a mano.
+- **28/10/2026:** nueva pantalla Configuración: precio general, alta manual de repartidores, precio propio, dar de baja y elegir quién sale en el resumen (`mostrar_en_resumen`). Sustituye a la pantalla Repartidores.
+- **28/10/2026:** el PDF se genera en el navegador (jsPDF + autotable), A4 apaisado, un mes en una página.

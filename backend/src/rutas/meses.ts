@@ -1,4 +1,4 @@
-import { and, asc, desc, eq, gte, inArray, lt, sql } from 'drizzle-orm';
+import { and, asc, desc, eq, gte, inArray, lt, or, sql } from 'drizzle-orm';
 import type { FastifyPluginAsync, FastifyReply } from 'fastify';
 import { z } from 'zod';
 import { empresaDe, requiereEmpresa } from '../auth.js';
@@ -198,14 +198,26 @@ export const rutasMeses: FastifyPluginAsync<{ db: Db; extractor: Extractor | nul
       .groupBy(mensajes.repartidorId);
     const mensajesPor = new Map(conMensajes.map((c) => [c.repartidorId, c.n]));
 
+    // Repartidores con datos ese mes + los activos que el dueño quiere ver en el resumen.
     const ids = [...new Set([...regs.map((r) => r.repartidorId), ...mensajesPor.keys()])];
-    const reps = ids.length
-      ? await db
-          .select({ id: repartidores.id, nombre: repartidores.nombre, activo: repartidores.activo, tarifa: repartidores.tarifaPaquete })
-          .from(repartidores)
-          .where(and(eq(repartidores.empresaId, empresaId), inArray(repartidores.id, ids)))
-          .orderBy(asc(repartidores.nombre))
-      : [];
+    const reps = await db
+      .select({
+        id: repartidores.id,
+        nombre: repartidores.nombre,
+        activo: repartidores.activo,
+        mostrarEnResumen: repartidores.mostrarEnResumen,
+        tarifa: repartidores.tarifaPaquete,
+      })
+      .from(repartidores)
+      .where(
+        and(
+          eq(repartidores.empresaId, empresaId),
+          ids.length
+            ? or(inArray(repartidores.id, ids), and(eq(repartidores.activo, true), eq(repartidores.mostrarEnResumen, true)))
+            : and(eq(repartidores.activo, true), eq(repartidores.mostrarEnResumen, true)),
+        ),
+      )
+      .orderBy(asc(repartidores.nombre));
 
     // Los días sin reporte se cuentan hasta el último mensaje subido (≈ fecha de exportación) y nunca más allá de hoy.
     const hoy = hoyMadrid();
@@ -235,6 +247,7 @@ export const rutasMeses: FastifyPluginAsync<{ db: Db; extractor: Extractor | nul
         id: r.id,
         nombre: r.nombre,
         activo: r.activo,
+        mostrarEnResumen: r.mostrarEnResumen,
         mensajes: mensajesPor.get(r.id) ?? 0,
         precioPropio: r.tarifa !== null,
         precioCentimos,
@@ -256,6 +269,35 @@ export const rutasMeses: FastifyPluginAsync<{ db: Db; extractor: Extractor | nul
       totales: general,
       repartidores: filas,
     };
+  });
+
+  /** Apuntar a mano un día (aunque no haya mensaje). Si ya existía, se corrige. */
+  app.put('/api/registros', async (req, reply) => {
+    const datos = Edicion.extend({
+      repartidorId: z.number().int(),
+      fecha: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+      nota: z.string().trim().max(300).optional(),
+    }).safeParse(req.body);
+    if (!datos.success) return reply.code(400).send({ error: 'Escribe números válidos.' });
+    const empresaId = empresaDe(req);
+    const { repartidorId, fecha, nota } = datos.data;
+    const [r] = await db
+      .select({ id: repartidores.id })
+      .from(repartidores)
+      .where(and(eq(repartidores.id, repartidorId), eq(repartidores.empresaId, empresaId)))
+      .limit(1);
+    if (!r) return reply.code(404).send({ error: 'Repartidor no encontrado.' });
+    if (await mesCerrado(db, empresaId, fecha.slice(0, 7))) return reply.code(409).send({ error: 'Este mes está cerrado.' });
+
+    const numeros = completar({ salida: datos.data.salida, entregados: datos.data.entregados, incidencias: datos.data.incidencias ?? null });
+    const { estado } = estadoDia(numeros);
+    const valores = { ...numeros, estado, editadoManual: true, revisado: true, ...(nota !== undefined ? { notaIa: nota || null } : {}) };
+    const [fila] = await db
+      .insert(registrosDia)
+      .values({ empresaId, repartidorId, fecha, ...valores })
+      .onConflictDoUpdate({ target: [registrosDia.repartidorId, registrosDia.fecha], set: valores })
+      .returning({ id: registrosDia.id });
+    return { ok: true, id: fila.id, estado, ...numeros };
   });
 
   /** Corrección manual de un día: la IA ya no lo vuelve a tocar. */

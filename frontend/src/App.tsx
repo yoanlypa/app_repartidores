@@ -1,6 +1,6 @@
 import { Navigate, NavLink, Outlet, Route, Routes } from 'react-router-dom'
 import Login from './paginas/Login'
-import Repartidores from './paginas/Repartidores'
+import Configuracion from './paginas/Configuracion'
 import Resumen from './paginas/Resumen'
 import SubirChats from './paginas/SubirChats'
 import { useSesion } from './sesion'
@@ -20,7 +20,12 @@ function Logo() {
 const enlaces = [
   { a: '/', texto: 'Subir chats', icono: 'M12 16V4m0 0L7 9m5-5 5 5M4 20h16' },
   { a: '/resumen', texto: 'Resumen', icono: 'M4 19V9m6 10V5m6 14v-7m4 7H2' },
-  { a: '/repartidores', texto: 'Repartidores', icono: 'M16 11a4 4 0 1 0-8 0 4 4 0 0 0 8 0Zm-12 9a8 8 0 0 1 16 0' },
+  {
+    a: '/configuracion',
+    texto: 'Configuración',
+    icono:
+      'M10.3 4.3a1.7 1.7 0 0 1 3.4 0 1.7 1.7 0 0 0 2.6 1.1 1.7 1.7 0 0 1 2.4 2.4 1.7 1.7 0 0 0 1.1 2.6 1.7 1.7 0 0 1 0 3.4 1.7 1.7 0 0 0-1.1 2.6 1.7 1.7 0 0 1-2.4 2.4 1.7 1.7 0 0 0-2.6 1.1 1.7 1.7 0 0 1-3.4 0 1.7 1.7 0 0 0-2.6-1.1 1.7 1.7 0 0 1-2.4-2.4 1.7 1.7 0 0 0-1.1-2.6 1.7 1.7 0 0 1 0-3.4 1.7 1.7 0 0 0 1.1-2.6 1.7 1.7 0 0 1 2.4-2.4 1.7 1.7 0 0 0 2.6-1.1ZM15 12a3 3 0 1 1-6 0 3 3 0 0 1 6 0Z',
+  },
 ]
 
 function Icono({ d }: { d: string }) {
@@ -67,7 +72,7 @@ function Marco() {
         </div>
       </header>
 
-      <main className="mx-auto max-w-3xl px-4 py-5 sm:py-8">
+      <main className="mx-auto max-w-5xl px-3 py-4 sm:px-4 sm:py-8">
         {yo.empresa ? (
           <Outlet />
         ) : (
@@ -102,7 +107,8 @@ export default function App() {
       <Route element={<Marco />}>
         <Route path="/" element={<SubirChats />} />
         <Route path="/resumen" element={<Resumen />} />
-        <Route path="/repartidores" element={<Repartidores />} />
+        <Route path="/configuracion" element={<Configuracion />} />
+        <Route path="/repartidores" element={<Navigate to="/configuracion" replace />} />
       </Route>
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>

@@ -30,7 +30,7 @@ const json = (cuerpo: unknown): RequestInit => ({
 
 export interface Yo {
   usuario: { nombre: string; email: string; rol: 'superadmin' | 'empresa' };
-  empresa: { id: number; nombre: string; nombreDuenoWhatsapp: string | null } | null;
+  empresa: { id: number; nombre: string; nombreDuenoWhatsapp: string | null; precioPaquete: number } | null;
 }
 
 export interface Repartidor {
@@ -38,6 +38,7 @@ export interface Repartidor {
   nombre: string;
   alias: string[];
   activo: boolean;
+  mostrarEnResumen: boolean;
   tarifaPaquete: string | null;
   totalMensajes: number;
   ultimoMensaje: string | null;
@@ -112,6 +113,7 @@ export interface ResumenMes {
     id: number;
     nombre: string;
     activo: boolean;
+    mostrarEnResumen: boolean;
     mensajes: number;
     precioPropio: boolean;
     precioCentimos: number;
@@ -130,7 +132,7 @@ export const api = {
   yo: () => llamar<Yo>('/api/auth/yo'),
 
   repartidores: () => llamar<{ repartidores: Repartidor[] }>('/api/repartidores'),
-  cambiarRepartidor: (id: number, cambios: Partial<Pick<Repartidor, 'nombre' | 'alias' | 'activo'>> & { tarifaPaquete?: number | null }) =>
+  cambiarRepartidor: (id: number, cambios: Partial<Pick<Repartidor, 'nombre' | 'alias' | 'activo' | 'mostrarEnResumen'>> & { tarifaPaquete?: number | null }) =>
     llamar<{ ok: true }>(`/api/repartidores/${id}`, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
@@ -156,6 +158,14 @@ export const api = {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ salida, entregados }),
+    }),
+  crearRepartidor: (nombre: string, tarifaPaquete: number | null) =>
+    llamar<{ ok: true; id: number }>('/api/repartidores', json({ nombre, tarifaPaquete })),
+  apuntarDia: (datos: { repartidorId: number; fecha: string; salida: number | null; entregados: number | null; nota?: string }) =>
+    llamar<{ ok: true; id: number; estado: EstadoDia }>('/api/registros', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(datos),
     }),
   cambiarPrecio: (precioPaquete: number) =>
     llamar<{ ok: true }>('/api/empresa/precio', {
@@ -198,4 +208,17 @@ export const euros = (centimos: number) =>
 export function leerPrecio(texto: string): number | null {
   const n = Number(texto.trim().replace('€', '').replace(',', '.'));
   return Number.isFinite(n) && n >= 0 && n <= 100 ? Math.round(n * 100) / 100 : null;
+}
+
+/** Días del mes para la tabla: todos menos los domingos (salvo que ese domingo tenga datos). */
+export function diasDelMes(mes: string, conDatos: Set<string> = new Set()): string[] {
+  const [a, m] = mes.split('-').map(Number)
+  const dias: string[] = []
+  for (let d = 1; d <= 31; d++) {
+    const f = new Date(Date.UTC(a, m - 1, d))
+    if (f.getUTCMonth() !== m - 1) break
+    const iso = f.toISOString().slice(0, 10)
+    if (f.getUTCDay() !== 0 || conDatos.has(iso)) dias.push(iso)
+  }
+  return dias
 }

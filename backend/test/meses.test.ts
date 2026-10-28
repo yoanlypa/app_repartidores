@@ -172,6 +172,38 @@ describe('API de meses', () => {
     expect(t2.repartidores[0].pagoCentimos).toBe(76 * 85);
   });
 
+  it('permite añadir un repartidor a mano y apuntarle un día sin mensaje', async () => {
+    const n = await app.inject({ method: 'POST', url: '/api/repartidores', headers: { cookie }, payload: { nombre: 'Luis' } });
+    expect(n.statusCode).toBe(200);
+    const dup = await app.inject({ method: 'POST', url: '/api/repartidores', headers: { cookie }, payload: { nombre: 'luis' } });
+    expect(dup.statusCode).toBe(409);
+
+    // Sale en el resumen aunque no tenga datos (se muestra por defecto).
+    let t = (await app.inject({ method: 'GET', url: '/api/meses/2026-10', headers: { cookie } })).json();
+    const luis = t.repartidores.find((r: { nombre: string }) => r.nombre === 'Luis');
+    expect(luis).toMatchObject({ mostrarEnResumen: true, dias: [] });
+
+    const d = await app.inject({
+      method: 'PUT',
+      url: '/api/registros',
+      headers: { cookie },
+      payload: { repartidorId: luis.id, fecha: '2026-10-07', salida: null, entregados: 10, nota: 'Lo dijo por teléfono' },
+    });
+    expect(d.json()).toMatchObject({ estado: 'ok', entregados: 10 });
+    t = (await app.inject({ method: 'GET', url: '/api/meses/2026-10', headers: { cookie } })).json();
+    expect(t.repartidores.find((r: { id: number }) => r.id === luis.id).dias[0]).toMatchObject({
+      fecha: '2026-10-07',
+      entregados: 10,
+      nota: 'Lo dijo por teléfono',
+      editadoManual: true,
+    });
+
+    // Ocultarlo del resumen.
+    await app.inject({ method: 'PATCH', url: `/api/repartidores/${luis.id}`, headers: { cookie }, payload: { mostrarEnResumen: false } });
+    t = (await app.inject({ method: 'GET', url: '/api/meses/2026-10', headers: { cookie } })).json();
+    expect(t.repartidores.find((r: { id: number }) => r.id === luis.id).mostrarEnResumen).toBe(false);
+  });
+
   it('lista los meses con mensajes', async () => {
     const r = (await app.inject({ method: 'GET', url: '/api/meses', headers: { cookie } })).json();
     expect(r.meses[0]).toMatchObject({ mes: '2026-10', estado: 'abierto' });

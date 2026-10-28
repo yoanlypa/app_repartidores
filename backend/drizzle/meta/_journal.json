@@ -29,6 +29,13 @@
       "when": 1793213213093,
       "tag": "0003_quitar_vuelta",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1793215921158,
+      "tag": "0004_mostrar_en_resumen",
+      "breakpoints": true
     }
   ]
 }

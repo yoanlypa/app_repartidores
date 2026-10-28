@@ -1,0 +1,1 @@
+ALTER TABLE "repartidores" ADD COLUMN "mostrar_en_resumen" boolean DEFAULT true NOT NULL;

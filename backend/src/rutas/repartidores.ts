@@ -4,12 +4,19 @@ import { z } from 'zod';
 import { empresaDe, requiereEmpresa } from '../auth.js';
 import type { Db } from '../db/index.js';
 import { empresas, mensajes, repartidores } from '../db/schema.js';
+import { normalizarNombre } from '../parser/normalizar.js';
 
 const Cambios = z.object({
   nombre: z.string().trim().min(1).max(80).optional(),
   alias: z.array(z.string().trim().min(1).max(80)).max(20).optional(),
   activo: z.boolean().optional(),
+  mostrarEnResumen: z.boolean().optional(),
   /** Precio propio por paquete entregado (null = el de la empresa). */
+  tarifaPaquete: z.number().min(0).max(100).nullable().optional(),
+});
+
+const Nuevo = z.object({
+  nombre: z.string().trim().min(1).max(80),
   tarifaPaquete: z.number().min(0).max(100).nullable().optional(),
 });
 
@@ -26,6 +33,7 @@ export const rutasRepartidores: FastifyPluginAsync<{ db: Db }> = async (app, { d
         nombre: repartidores.nombre,
         alias: repartidores.alias,
         activo: repartidores.activo,
+        mostrarEnResumen: repartidores.mostrarEnResumen,
         tarifaPaquete: repartidores.tarifaPaquete,
         totalMensajes: count(mensajes.id),
         ultimoMensaje: max(mensajes.fechaHora),
@@ -36,6 +44,27 @@ export const rutasRepartidores: FastifyPluginAsync<{ db: Db }> = async (app, { d
       .groupBy(repartidores.id)
       .orderBy(asc(repartidores.nombre));
     return { repartidores: filas };
+  });
+
+  /** Alta manual de un repartidor (sin chat). Su nombre sirve también como alias de WhatsApp. */
+  app.post('/api/repartidores', async (req, reply) => {
+    const datos = Nuevo.safeParse(req.body);
+    if (!datos.success) return reply.code(400).send({ error: 'Escribe el nombre del repartidor.' });
+    const empresaId = empresaDe(req);
+    const { nombre, tarifaPaquete } = datos.data;
+    const existentes = await db
+      .select({ nombre: repartidores.nombre, alias: repartidores.alias })
+      .from(repartidores)
+      .where(eq(repartidores.empresaId, empresaId));
+    const n = normalizarNombre(nombre);
+    if (existentes.some((r) => [r.nombre, ...r.alias].some((a) => normalizarNombre(a) === n))) {
+      return reply.code(409).send({ error: 'Ya hay un repartidor con ese nombre.' });
+    }
+    const [r] = await db
+      .insert(repartidores)
+      .values({ empresaId, nombre, alias: [nombre], tarifaPaquete: tarifaPaquete == null ? null : tarifaPaquete.toFixed(2) })
+      .returning({ id: repartidores.id });
+    return { ok: true, id: r.id };
   });
 
   /** Precio por paquete entregado de la empresa (el que se aplica por defecto). */

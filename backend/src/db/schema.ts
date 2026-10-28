@@ -60,6 +60,8 @@ export const repartidores = pgTable(
     tarifaDia: numeric('tarifa_dia', { precision: 10, scale: 2 }).notNull().default('0'),
     fijoMensual: numeric('fijo_mensual', { precision: 10, scale: 2 }).notNull().default('0'),
     activo: boolean('activo').notNull().default(true),
+    /** Si sale como columna en la tabla del resumen. */
+    mostrarEnResumen: boolean('mostrar_en_resumen').notNull().default(true),
     creado: timestamp('creado', { withTimezone: true }).defaultNow().notNull(),
   },
   (t) => [index('repartidores_empresa_idx').on(t.empresaId)],

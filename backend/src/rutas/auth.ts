@@ -49,7 +49,14 @@ export const rutasAuth: FastifyPluginAsync<{ db: Db; cookieSegura: boolean }> = 
       : null;
     return {
       usuario: { nombre: u.nombre, email: u.email, rol: u.rol },
-      empresa: empresa ? { id: empresa.id, nombre: empresa.nombre, nombreDuenoWhatsapp: empresa.nombreDuenoWhatsapp } : null,
+      empresa: empresa
+        ? {
+            id: empresa.id,
+            nombre: empresa.nombre,
+            nombreDuenoWhatsapp: empresa.nombreDuenoWhatsapp,
+            precioPaquete: Number(empresa.precioPaquete),
+          }
+        : null,
     };
   });
 };
