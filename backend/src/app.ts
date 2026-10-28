@@ -23,7 +23,7 @@ export interface OpcionesApp {
 }
 
 /** Se sube con cada cambio para comprobar qué versión está desplegada. */
-export const VERSION = '2026.10.28-1';
+export const VERSION = '2026.10.28-2';
 
 export const MAX_MB_ARCHIVO = 20;
 export const MAX_ARCHIVOS = 40;
@@ -35,7 +35,7 @@ export async function crearApp(op: OpcionesApp) {
   await app.register(cors, {
     origin: op.origenFrontend.split(',').map((s) => s.trim()).filter(Boolean),
     credentials: true,
-    methods: ['GET', 'POST', 'PATCH', 'DELETE'],
+    methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE'],
   });
   await app.register(rateLimit, { global: false });
   await app.register(multipart, {

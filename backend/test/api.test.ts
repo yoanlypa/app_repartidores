@@ -180,6 +180,15 @@ describe('CORS', () => {
       headers: { origin: 'http://localhost:5173', 'access-control-request-method': 'PATCH' },
     });
     expect(r.headers['access-control-allow-methods']).toContain('PATCH');
+    // Guardar un día usa PUT y eliminar usa DELETE: los dos tienen que estar permitidos.
+    for (const metodo of ['PUT', 'DELETE']) {
+      const p = await app.inject({
+        method: 'OPTIONS',
+        url: '/api/registros',
+        headers: { origin: 'http://localhost:5173', 'access-control-request-method': metodo },
+      });
+      expect(p.headers['access-control-allow-methods']).toContain(metodo);
+    }
     expect(r.headers['access-control-allow-credentials']).toBe('true');
   });
 });
