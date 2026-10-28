@@ -22,6 +22,9 @@ export interface OpcionesApp {
   extractor?: Extractor | null;
 }
 
+/** Se sube con cada cambio para comprobar qué versión está desplegada. */
+export const VERSION = '2026.10.28-1';
+
 export const MAX_MB_ARCHIVO = 20;
 export const MAX_ARCHIVOS = 40;
 
@@ -55,7 +58,7 @@ export async function crearApp(op: OpcionesApp) {
     return reply.code(500).send({ error: 'Error interno. Inténtalo de nuevo.' });
   });
 
-  app.get('/api/salud', async () => ({ ok: true }));
+  app.get('/api/salud', async () => ({ ok: true, version: VERSION }));
 
   await app.register(rutasAuth, { db: op.db, cookieSegura: op.cookieSegura });
   await app.register(rutasRepartidores, { db: op.db });

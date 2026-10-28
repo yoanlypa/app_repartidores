@@ -322,6 +322,7 @@ export default function Configuracion() {
           </Boton>
         </Tarjeta>
       </Seccion>
+      <p className="pb-2 text-center text-[11px] text-zinc-400">Versión 2026.10.28-1</p>
     </div>
   )
 }
