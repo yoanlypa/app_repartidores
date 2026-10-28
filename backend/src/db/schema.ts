@@ -17,6 +17,8 @@ export const empresas = pgTable('empresas', {
   nombre: text('nombre').notNull(),
   /** Cómo aparece el dueño en los chats exportados (se detecta en la primera subida). */
   nombreDuenoWhatsapp: text('nombre_dueno_whatsapp'),
+  /** Precio por paquete entregado que paga el dueño (por defecto para todos los repartidores). */
+  precioPaquete: numeric('precio_paquete', { precision: 10, scale: 2 }).notNull().default('0'),
   creado: timestamp('creado', { withTimezone: true }).defaultNow().notNull(),
 });
 
@@ -53,7 +55,8 @@ export const repartidores = pgTable(
     tipoTarifa: text('tipo_tarifa', { enum: ['por_paquete', 'por_dia', 'fijo_mas_variable'] })
       .notNull()
       .default('por_paquete'),
-    tarifaPaquete: numeric('tarifa_paquete', { precision: 10, scale: 2 }).notNull().default('0'),
+    /** Precio propio por paquete entregado; null = usa el de la empresa. */
+    tarifaPaquete: numeric('tarifa_paquete', { precision: 10, scale: 2 }),
     tarifaDia: numeric('tarifa_dia', { precision: 10, scale: 2 }).notNull().default('0'),
     fijoMensual: numeric('fijo_mensual', { precision: 10, scale: 2 }).notNull().default('0'),
     activo: boolean('activo').notNull().default(true),
@@ -131,7 +134,10 @@ export const registrosDia = pgTable(
       .references(() => repartidores.id, { onDelete: 'cascade' }),
     fecha: date('fecha').notNull(),
     salida: integer('salida'),
-    vuelta: integer('vuelta'),
+    /** Paquetes entregados (lo que se paga). */
+    entregados: integer('entregados'),
+    /** Incidencias (paquetes que no se entregaron). */
+    incidencias: integer('incidencias'),
     estado: text('estado', { enum: ['ok', 'dudoso', 'error'] }).notNull().default('ok'),
     notaIa: text('nota_ia'),
     mensajeOriginal: text('mensaje_original'),

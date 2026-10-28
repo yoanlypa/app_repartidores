@@ -2,9 +2,9 @@ import { and, asc, desc, eq, gte, inArray, lt, sql } from 'drizzle-orm';
 import type { FastifyPluginAsync, FastifyReply } from 'fastify';
 import { z } from 'zod';
 import { empresaDe, requiereEmpresa } from '../auth.js';
-import { calcularTotales, diasSinReporte, entregadosDia, validarDias } from '../calculo/validar.js';
+import { aCentimos, calcularTotales, completar, diasSinReporte, estadoDia, pagoCentimos, validarDias } from '../calculo/validar.js';
 import type { Db } from '../db/index.js';
-import { mensajes, meses, registrosDia, repartidores } from '../db/schema.js';
+import { empresas, mensajes, meses, registrosDia, repartidores } from '../db/schema.js';
 import { ErrorIa, type Extractor } from '../ia/extraer.js';
 
 const MES = /^\d{4}-(0[1-9]|1[0-2])$/;
@@ -20,7 +20,8 @@ const hoyMadrid = () => new Date().toLocaleDateString('sv-SE', { timeZone: 'Euro
 
 const Edicion = z.object({
   salida: z.number().int().min(0).max(5000).nullable(),
-  vuelta: z.number().int().min(0).max(5000).nullable(),
+  entregados: z.number().int().min(0).max(5000).nullable(),
+  incidencias: z.number().int().min(0).max(5000).nullable().optional(),
 });
 
 async function mesCerrado(db: Db, empresaId: number, mes: string) {
@@ -139,7 +140,8 @@ export const rutasMeses: FastifyPluginAsync<{ db: Db; extractor: Extractor | nul
                   repartidorId,
                   fecha: d.fecha,
                   salida: d.salida,
-                  vuelta: d.vuelta,
+                  entregados: d.entregados,
+                  incidencias: d.incidencias,
                   estado: d.estado,
                   notaIa: d.nota || null,
                   mensajeOriginal: d.mensajeOriginal || null,
@@ -199,7 +201,7 @@ export const rutasMeses: FastifyPluginAsync<{ db: Db; extractor: Extractor | nul
     const ids = [...new Set([...regs.map((r) => r.repartidorId), ...mensajesPor.keys()])];
     const reps = ids.length
       ? await db
-          .select({ id: repartidores.id, nombre: repartidores.nombre, activo: repartidores.activo })
+          .select({ id: repartidores.id, nombre: repartidores.nombre, activo: repartidores.activo, tarifa: repartidores.tarifaPaquete })
           .from(repartidores)
           .where(and(eq(repartidores.empresaId, empresaId), inArray(repartidores.id, ids)))
           .orderBy(asc(repartidores.nombre))
@@ -210,6 +212,9 @@ export const rutasMeses: FastifyPluginAsync<{ db: Db; extractor: Extractor | nul
     const ultimoSubido = conMensajes.reduce((m, c) => (c.ultimo > m ? c.ultimo : m), '').slice(0, 10);
     const limite = [hoy, ultimoSubido || hoy, `${mes}-31`].sort()[0];
 
+    const [empresa] = await db.select({ precio: empresas.precioPaquete }).from(empresas).where(eq(empresas.id, empresaId)).limit(1);
+    const precioEmpresa = aCentimos(empresa?.precio ?? 0);
+
     const filas = reps.map((r) => {
       const dias = regs
         .filter((x) => x.repartidorId === r.id)
@@ -217,19 +222,24 @@ export const rutasMeses: FastifyPluginAsync<{ db: Db; extractor: Extractor | nul
           id: x.id,
           fecha: String(x.fecha).slice(0, 10),
           salida: x.salida,
-          vuelta: x.vuelta,
-          entregados: entregadosDia(x),
+          entregados: x.entregados,
+          incidencias: x.incidencias,
           estado: x.estado,
           nota: x.notaIa,
           mensajeOriginal: x.mensajeOriginal,
           editadoManual: x.editadoManual,
         }));
+      const totales = calcularTotales(dias);
+      const precioCentimos = r.tarifa === null ? precioEmpresa : aCentimos(r.tarifa);
       return {
         id: r.id,
         nombre: r.nombre,
         activo: r.activo,
         mensajes: mensajesPor.get(r.id) ?? 0,
-        totales: calcularTotales(dias),
+        precioPropio: r.tarifa !== null,
+        precioCentimos,
+        pagoCentimos: pagoCentimos(totales.entregados, precioCentimos),
+        totales,
         diasSinReporte: dias.length ? diasSinReporte(mes, new Set(dias.map((d) => d.fecha)), limite) : [],
         dias,
       };
@@ -241,6 +251,8 @@ export const rutasMeses: FastifyPluginAsync<{ db: Db; extractor: Extractor | nul
       estado: estadoMes?.estado ?? 'abierto',
       procesado: estadoMes?.procesado ?? null,
       iaDisponible: Boolean(extractor),
+      precioCentimos: precioEmpresa,
+      pagoCentimos: filas.reduce((t, f) => t + f.pagoCentimos, 0),
       totales: general,
       repartidores: filas,
     };
@@ -260,12 +272,13 @@ export const rutasMeses: FastifyPluginAsync<{ db: Db; extractor: Extractor | nul
     if (await mesCerrado(db, empresaId, String(reg.fecha).slice(0, 7))) {
       return reply.code(409).send({ error: 'Este mes está cerrado.' });
     }
-    const { salida, vuelta } = datos.data;
-    const estado = salida === null || vuelta === null ? 'dudoso' : vuelta > salida ? 'error' : 'ok';
+    // Con la corrección manual, las incidencias se recalculan salvo que se indiquen.
+    const numeros = completar({ salida: datos.data.salida, entregados: datos.data.entregados, incidencias: datos.data.incidencias ?? null });
+    const { estado } = estadoDia(numeros);
     await db
       .update(registrosDia)
-      .set({ salida, vuelta, estado, editadoManual: true, revisado: true })
+      .set({ ...numeros, estado, editadoManual: true, revisado: true })
       .where(eq(registrosDia.id, reg.id));
-    return { ok: true, estado };
+    return { ok: true, estado, ...numeros };
   });
 };

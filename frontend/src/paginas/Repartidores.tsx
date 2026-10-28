@@ -1,11 +1,12 @@
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { api, fechaCorta, type Repartidor } from '../api'
+import { api, euros, fechaCorta, leerPrecio, type Repartidor } from '../api'
 import { Aviso, Boton, campo, claseBoton, Tarjeta } from '../ui'
 
 function Fila({ r, alCambiar }: { r: Repartidor; alCambiar: () => void }) {
   const [editando, setEditando] = useState(false)
   const [nombre, setNombre] = useState(r.nombre)
+  const [precio, setPrecio] = useState(r.tarifaPaquete ? Number(r.tarifaPaquete).toFixed(2).replace('.', ',') : '')
   const [ocupado, setOcupado] = useState(false)
   const [error, setError] = useState('')
 
@@ -29,13 +30,26 @@ function Fila({ r, alCambiar }: { r: Repartidor; alCambiar: () => void }) {
     <Tarjeta className={r.activo ? '' : 'opacity-60'}>
       {editando ? (
         <form
-          className="flex flex-col gap-2 sm:flex-row"
+          className="flex flex-col gap-2 sm:flex-row sm:items-end"
           onSubmit={(e) => {
             e.preventDefault()
-            if (nombre.trim()) guardar({ nombre: nombre.trim() })
+            if (!nombre.trim()) return
+            const p = precio.trim() === '' ? null : leerPrecio(precio)
+            if (precio.trim() !== '' && p === null) {
+              setError('Escribe un precio válido, por ejemplo 0,85, o déjalo vacío.')
+              return
+            }
+            guardar({ nombre: nombre.trim(), tarifaPaquete: p })
           }}
         >
-          <input className={campo} value={nombre} onChange={(e) => setNombre(e.target.value)} autoFocus aria-label="Nombre" />
+          <label className="flex-1">
+            <span className="mb-1 block text-xs font-medium text-zinc-600">Nombre</span>
+            <input className={campo} value={nombre} onChange={(e) => setNombre(e.target.value)} autoFocus />
+          </label>
+          <label className="sm:w-40">
+            <span className="mb-1 block text-xs font-medium text-zinc-600">Precio propio (€/paquete)</span>
+            <input className={campo} inputMode="decimal" placeholder="El general" value={precio} onChange={(e) => setPrecio(e.target.value)} />
+          </label>
           <div className="flex gap-2">
             <Boton type="submit" cargando={ocupado} className="flex-1">
               Guardar
@@ -55,6 +69,9 @@ function Fila({ r, alCambiar }: { r: Repartidor; alCambiar: () => void }) {
             <p className="mt-0.5 text-xs text-zinc-500">
               {r.totalMensajes} mensajes · último: {fechaCorta(r.ultimoMensaje)}
             </p>
+            {r.tarifaPaquete !== null && (
+              <p className="mt-1 text-xs font-medium text-lime-800">Precio propio: {euros(Math.round(Number(r.tarifaPaquete) * 100))} por paquete</p>
+            )}
             {otrosNombres.length > 0 && (
               <p className="mt-1 truncate text-xs text-zinc-400">En WhatsApp: {otrosNombres.join(', ')}</p>
             )}

@@ -255,3 +255,8 @@ Además, ajustes manuales por mes (concepto + importe positivo o negativo: adela
 - **28/10/2026:** a la IA se le envían los mensajes del mes más la madrugada (hasta las 06:00) del día 1 del mes siguiente, para los "ayer salí con...".
 - **28/10/2026:** los días dudosos con datos completos suman en los totales; los días con error (vuelta > salida) no suman hasta corregirlos.
 - **28/10/2026:** los días sin reporte se cuentan hasta la fecha del último mensaje subido de la empresa en ese mes (≈ fecha de exportación).
+- **28/10/2026 (feedback de Yoa con chats reales):** lo que se paga son los **entregados**. Se guarda salida, entregados e incidencias (no "vuelta"). Las incidencias = salida − entregados; si solo dice entregados e incidencias, salida = suma. Un día solo con entregados es válido.
+- **28/10/2026:** pago = entregados × precio por paquete. Precio general en la empresa (`precio_paquete`) y precio propio opcional por repartidor (`tarifa_paquete`, null = general). Se calcula en céntimos.
+- **28/10/2026:** la fecha escrita en el mensaje ("15/8") manda sobre la fecha de envío; varios mensajes del mismo día se juntan.
+- **28/10/2026:** modelo por defecto `claude-sonnet-5-5` (más preciso con abreviaturas; el coste por mes sigue siendo de céntimos).
+- **28/10/2026:** si el chat se exportó desde el móvil del repartidor (el archivo lleva el nombre del dueño), el repartidor toma el nombre de su remitente.

@@ -180,3 +180,13 @@ describe('analizarChats', () => {
     expect(r.detectados[0].coincidencia).toEqual({ id: 7, nombre: 'Pedro García' });
   });
 });
+
+describe('chat exportado desde el móvil del repartidor', () => {
+  it('si el archivo lleva el nombre del dueño, el repartidor se llama como su remitente', async () => {
+    const texto = '16/08/26, 21:49 - Yoanly Perez: Entregado 9 15/8\n17/08/26, 09:00 - Fabian: ok\n';
+    const r = analizarChats([await preparar('Chat de WhatsApp con Fabian.txt', Buffer.from(texto))], { duenoConocido: 'Fabian' });
+    expect(r.dueno).toBe('Fabian');
+    expect(r.detectados.map((d) => d.nombre)).toEqual(['Yoanly Perez']);
+    expect(r.detectados[0].alias).toEqual(['Yoanly Perez']);
+  });
+});

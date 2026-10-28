@@ -10,5 +10,5 @@ export const config = {
   origenFrontend: process.env.CORS_ORIGIN ?? 'http://localhost:5173',
   cookieSegura: process.env.NODE_ENV === 'production',
   anthropicApiKey: process.env.ANTHROPIC_API_KEY ?? '',
-  modeloIa: process.env.ANTHROPIC_MODEL ?? 'claude-haiku-5-5',
+  modeloIa: process.env.ANTHROPIC_MODEL ?? 'claude-sonnet-5-5',
 };

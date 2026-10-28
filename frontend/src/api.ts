@@ -38,6 +38,7 @@ export interface Repartidor {
   nombre: string;
   alias: string[];
   activo: boolean;
+  tarifaPaquete: string | null;
   totalMensajes: number;
   ultimoMensaje: string | null;
 }
@@ -81,8 +82,8 @@ export type EstadoDia = 'ok' | 'dudoso' | 'error';
 export interface Totales {
   diasTrabajados: number;
   salida: number;
-  vuelta: number;
   entregados: number;
+  incidencias: number;
   dudosos: number;
   errores: number;
 }
@@ -91,8 +92,8 @@ export interface DiaMes {
   id: number;
   fecha: string;
   salida: number | null;
-  vuelta: number | null;
   entregados: number | null;
+  incidencias: number | null;
   estado: EstadoDia;
   nota: string | null;
   mensajeOriginal: string | null;
@@ -104,12 +105,17 @@ export interface ResumenMes {
   estado: 'abierto' | 'cerrado';
   procesado: string | null;
   iaDisponible: boolean;
+  precioCentimos: number;
+  pagoCentimos: number;
   totales: Totales;
   repartidores: {
     id: number;
     nombre: string;
     activo: boolean;
     mensajes: number;
+    precioPropio: boolean;
+    precioCentimos: number;
+    pagoCentimos: number;
     totales: Totales;
     diasSinReporte: string[];
     dias: DiaMes[];
@@ -124,7 +130,7 @@ export const api = {
   yo: () => llamar<Yo>('/api/auth/yo'),
 
   repartidores: () => llamar<{ repartidores: Repartidor[] }>('/api/repartidores'),
-  cambiarRepartidor: (id: number, cambios: Partial<Pick<Repartidor, 'nombre' | 'alias' | 'activo'>>) =>
+  cambiarRepartidor: (id: number, cambios: Partial<Pick<Repartidor, 'nombre' | 'alias' | 'activo'>> & { tarifaPaquete?: number | null }) =>
     llamar<{ ok: true }>(`/api/repartidores/${id}`, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
@@ -145,11 +151,17 @@ export const api = {
     llamar<{ ok: true; procesados: number; errores: { repartidor: string; error: string }[] }>(`/api/meses/${mes}/procesar`, {
       method: 'POST',
     }),
-  corregirDia: (id: number, salida: number | null, vuelta: number | null) =>
+  corregirDia: (id: number, salida: number | null, entregados: number | null) =>
     llamar<{ ok: true; estado: EstadoDia }>(`/api/registros/${id}`, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ salida, vuelta }),
+      body: JSON.stringify({ salida, entregados }),
+    }),
+  cambiarPrecio: (precioPaquete: number) =>
+    llamar<{ ok: true }>('/api/empresa/precio', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ precioPaquete }),
     }),
   cancelar: (id: number) => llamar<{ ok: true }>(`/api/importaciones/${id}/cancelar`, { method: 'POST' }),
 };
@@ -176,4 +188,14 @@ const DIAS = ['dom', 'lun', 'mar', 'mié', 'jue', 'vie', 'sáb'];
 export function diaSemana(fecha: string): string {
   const d = new Date(fecha + 'T12:00:00Z');
   return `${DIAS[d.getUTCDay()]} ${d.getUTCDate()}`;
+}
+
+/** 2720 -> "27,20 €" */
+export const euros = (centimos: number) =>
+  (centimos / 100).toLocaleString('es-ES', { style: 'currency', currency: 'EUR' });
+
+/** "0,85" o "0.85" -> 0.85 (null si no es un número válido). */
+export function leerPrecio(texto: string): number | null {
+  const n = Number(texto.trim().replace('€', '').replace(',', '.'));
+  return Number.isFinite(n) && n >= 0 && n <= 100 ? Math.round(n * 100) / 100 : null;
 }

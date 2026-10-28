@@ -15,6 +15,20 @@
       "when": 1793211593091,
       "tag": "0001_meses_procesado",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1793213212229,
+      "tag": "0002_entregados",
+      "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1793213213093,
+      "tag": "0003_quitar_vuelta",
+      "breakpoints": true
     }
   ]
 }

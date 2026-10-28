@@ -2,45 +2,62 @@ import Anthropic from '@anthropic-ai/sdk';
 import { z } from 'zod';
 import type { Mensaje } from '../parser/whatsapp.js';
 
-/** Lo que la IA devuelve para un día. La IA NUNCA calcula totales. */
+/** Lo que la IA devuelve para un día. La IA NUNCA calcula totales ni importes. */
 export const DiaExtraido = z.object({
   fecha: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
   salida: z.number().int().min(0).max(5000).nullable(),
-  vuelta: z.number().int().min(0).max(5000).nullable(),
+  entregados: z.number().int().min(0).max(5000).nullable(),
+  incidencias: z.number().int().min(0).max(5000).nullable(),
   confianza: z.enum(['alta', 'baja']),
-  nota: z.string().max(300).default(''),
+  nota: z.string().max(400).default(''),
   mensaje_original: z.string().max(1000).default(''),
 });
 export type DiaExtraido = z.infer<typeof DiaExtraido>;
 
 const Respuesta = z.object({ dias: z.array(DiaExtraido) });
 
-/** Función que convierte los mensajes de un repartidor en días con salida/vuelta. */
+/** Función que convierte los mensajes de un repartidor en días con salida/entregados/incidencias. */
 export type Extractor = (entrada: { repartidor: string; mes: string; mensajes: Mensaje[] }) => Promise<DiaExtraido[]>;
 
 export class ErrorIa extends Error {}
 
 const INSTRUCCIONES = `Eres un asistente que extrae datos de reparto de mensajes de WhatsApp.
-Recibirás los mensajes de UN repartidor durante un mes, con fecha y hora (hora de España).
-Cada día de trabajo el repartidor indica con cuántos paquetes salió y con cuántos volvió.
+Recibirás los mensajes de UN repartidor durante un mes, cada uno con la fecha y hora en que se ENVIÓ (hora de España).
 
-Para cada día con datos de paquetes devuelve: fecha (AAAA-MM-DD), salida, vuelta, confianza ("alta" | "baja"), nota y mensaje_original (el texto del mensaje en el que te basas, tal cual).
+Lo MÁS IMPORTANTE es el número de paquetes ENTREGADOS de cada día: es lo que se le paga al repartidor.
+Para cada día de trabajo devuelve:
+- salida: paquetes con los que salió (null si no lo dice).
+- entregados: paquetes que entregó (null si no lo dice).
+- incidencias: paquetes que no entregó (incidencias, devueltos, ausentes, vuelta...). null si no lo dice.
 
-Reglas:
-- Si hay una corrección el mismo día ("perdona, eran 118"), usa el último dato y explícalo en "nota".
-- Si un mensaje enviado de madrugada (00:00–05:59) se refiere claramente al día anterior ("ayer salí con..."), asígnalo a ese día anterior.
-- Si falta salida o vuelta, pon null y confianza "baja".
-- Si el repartidor indica entregados en vez de vuelta ("entregué 112 de 120"), deduce vuelta (120 - 112 = 8) y explícalo en "nota".
-- Formatos habituales: "salí con 120 volví con 8", "120/8", "120 y 8", "salgo 130 vuelvo 10". El primer número es la salida y el segundo la vuelta.
-- Si no está claro qué número es cuál, o el mensaje es ambiguo, usa confianza "baja" y explica la duda en "nota".
+Cómo reconocer cada número:
+- ENTREGADOS: "entregados", "entregado", "entreg", "entrg", "entre", "ent", "entregué", "entrega", "repartidos", "ok". Ejemplos: "Entregado 9" → entregados 9. "13 entreg" → entregados 13. "Salida 14 entregados 9" → salida 14, entregados 9.
+- SALIDA: "salida", "salí con", "salgo con", "llevo", "cargué". Ejemplo: "20 salida 10 entregados" → salida 20, entregados 10.
+- INCIDENCIAS: "incidencias", "inc", "incid", "devueltos", "vuelta", "volví con", "me quedan", "sobran", "ausentes". Ejemplo: "10 entreg 10 incidencias" → entregados 10, incidencias 10 y, como no dice la salida, salida = 20 (entregados + incidencias).
+- "salí con 120 volví con 8" → salida 120, incidencias 8, entregados 112 (salida − incidencias).
+- Dos números sin palabras ("120/8", "120 y 8"): el primero es la salida y el segundo los entregados; pon confianza "baja" y explícalo en "nota".
+- NUNCA pongas como entregados un número que el repartidor llama incidencias o vuelta, ni al revés.
+
+Fechas:
+- Si el mensaje dice una fecha ("15/8", "17/08", "el 14"), esa es la fecha del día, aunque el mensaje se enviara otro día. El formato es día/mes. El año es el del envío.
+- Si no dice fecha, es el día del envío. Si se envió de madrugada (00:00–05:59) y habla de la jornada anterior, es el día anterior.
+- Si un día tiene varios mensajes (por la mañana la salida y por la noche los entregados), júntalos en un solo resultado.
+- Si hay una corrección ("perdona, eran 118"), usa el último dato y explícalo en "nota".
+
+Confianza:
+- "alta" si los entregados están claros.
+- "baja" si no sabes cuántos entregó, si los números se contradicen o si no está claro a qué día pertenece.
+
+Otras reglas:
 - Ignora los mensajes que no hablen de paquetes.
 - Un solo resultado por fecha.
-- NO calcules totales ni sumes nada.
-- La "nota" va en español, breve. Déjala vacía si todo está claro.`;
+- mensaje_original: el texto de el/los mensajes en los que te basas, tal cual (si son varios, sepáralos con " · ").
+- nota: en español y muy breve; solo si hay algo que aclarar. Déjala vacía si todo está claro.
+- NO sumes ni calcules totales del mes.`;
 
 const HERRAMIENTA: Anthropic.Tool = {
   name: 'guardar_dias',
-  description: 'Guarda los datos de salida y vuelta de paquetes de cada día.',
+  description: 'Guarda la salida, los entregados y las incidencias de cada día.',
   input_schema: {
     type: 'object',
     properties: {
@@ -49,14 +66,15 @@ const HERRAMIENTA: Anthropic.Tool = {
         items: {
           type: 'object',
           properties: {
-            fecha: { type: 'string', description: 'AAAA-MM-DD' },
+            fecha: { type: 'string', description: 'AAAA-MM-DD del día de trabajo' },
             salida: { type: ['integer', 'null'], description: 'Paquetes con los que salió' },
-            vuelta: { type: ['integer', 'null'], description: 'Paquetes con los que volvió' },
+            entregados: { type: ['integer', 'null'], description: 'Paquetes entregados (lo que se paga)' },
+            incidencias: { type: ['integer', 'null'], description: 'Paquetes no entregados' },
             confianza: { type: 'string', enum: ['alta', 'baja'] },
             nota: { type: 'string' },
             mensaje_original: { type: 'string' },
           },
-          required: ['fecha', 'salida', 'vuelta', 'confianza', 'nota', 'mensaje_original'],
+          required: ['fecha', 'salida', 'entregados', 'incidencias', 'confianza', 'nota', 'mensaje_original'],
         },
       },
     },
@@ -65,7 +83,7 @@ const HERRAMIENTA: Anthropic.Tool = {
 };
 
 export function formatearMensajes(mensajes: Mensaje[]): string {
-  return mensajes.map((m) => `${m.fechaHora.slice(0, 10)} ${m.fechaHora.slice(11, 16)} | ${m.texto.replace(/\n/g, ' / ')}`).join('\n');
+  return mensajes.map((m) => `[enviado ${m.fechaHora.slice(0, 10)} ${m.fechaHora.slice(11, 16)}] ${m.texto.replace(/\n/g, ' / ')}`).join('\n');
 }
 
 export function crearExtractorAnthropic(opciones: { apiKey: string; modelo: string }): Extractor {

@@ -153,13 +153,19 @@ export function analizarChats(
 
     if (otros.length > 1) resumen.tipo = 'grupo';
 
+    // El nombre del archivo es como el dueño tiene guardado al repartidor, salvo que el chat se
+    // exportara desde el móvil del repartidor: entonces el archivo lleva el nombre del dueño.
+    const archivoEsDelRepartidor =
+      resumen.tipo === 'individual' &&
+      Boolean(c.nombreDesdeArchivo) &&
+      normalizarNombre(c.nombreDesdeArchivo!) !== duenoClave;
+
     for (const clave of otros) {
       const original = rem.get(clave)!;
-      // En un chat individual usamos el nombre del archivo (es como el dueño tiene guardado el contacto).
-      const nombre = resumen.tipo === 'individual' && c.nombreDesdeArchivo ? c.nombreDesdeArchivo : original;
+      const nombre = archivoEsDelRepartidor ? c.nombreDesdeArchivo! : original;
       const claveFinal = normalizarNombre(nombre);
       const alias = [original];
-      if (resumen.tipo === 'individual' && c.nombreDesdeArchivo) alias.push(c.nombreDesdeArchivo);
+      if (archivoEsDelRepartidor) alias.push(c.nombreDesdeArchivo!);
       anadir(claveFinal, nombre, alias, c.nombreArchivo,
         c.chat.mensajes.filter((m) => normalizarNombre(m.remitente) === clave));
     }
