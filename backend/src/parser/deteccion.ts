@@ -37,7 +37,7 @@ export interface ResumenArchivo {
 export interface Analisis {
   /** Nombre del dueño en los chats (null si no se ha podido deducir). */
   dueno: string | null;
-  /** Si no se sabe quién es el dueño: todos los remitentes para que elija. */
+  /** Todos los remitentes de los chats, para elegir (o cambiar) quién es el dueño. */
   remitentesPosibles: string[];
   archivos: ResumenArchivo[];
   detectados: RepartidorDetectado[];
@@ -172,9 +172,9 @@ export function analizarChats(
     d.coincidencia = buscarCoincidencia(d.clave, d.alias, existentes);
   }
 
-  const remitentesPosibles = duenoClave
-    ? []
-    : [...new Set(chats.flatMap((c) => [...remitentes(c.chat).values()]))].sort();
+  const remitentesPosibles = [...new Set(chats.flatMap((c) => [...remitentes(c.chat).values()]))].sort((a, b) =>
+    a.localeCompare(b, 'es'),
+  );
 
   return {
     dueno: duenoNombre,

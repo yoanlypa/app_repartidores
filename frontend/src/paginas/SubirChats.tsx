@@ -34,6 +34,7 @@ export default function SubirChats() {
   const { recargar } = useSesion()
   const navegar = useNavigate()
   const [leyendo, setLeyendo] = useState<string | null>(null)
+  const [cambiandoDueno, setCambiandoDueno] = useState(false)
   const [erroresIa, setErroresIa] = useState<string[]>([])
   const input = useRef<HTMLInputElement>(null)
   const [archivos, setArchivos] = useState<File[]>([])
@@ -190,6 +191,7 @@ export default function SubirChats() {
   if (analisis) {
     const avisos = analisis.archivos.filter((a) => a.aviso)
     const sinDueno = !analisis.dueno && analisis.remitentesPosibles.length > 0
+    const elegirDueno = sinDueno || cambiandoDueno
     const hayAlgo = analisis.detectados.length > 0
     const todoDescartado = analisis.detectados.every((d) => elecciones[d.clave]?.accion === 'descartar')
 
@@ -202,27 +204,47 @@ export default function SubirChats() {
             {analisis.dueno && (
               <>
                 {' '}
-                · Tú apareces como <b>{analisis.dueno}</b>
+                · El dueño es <b>{analisis.dueno}</b>{' '}
+                {!cambiandoDueno && analisis.remitentesPosibles.length > 1 && (
+                  <button className="font-medium text-zinc-900 underline underline-offset-2" onClick={() => setCambiandoDueno(true)}>
+                    Cambiar
+                  </button>
+                )}
               </>
             )}
           </p>
         </div>
 
-        {sinDueno && (
+        {elegirDueno && (
           <Tarjeta className="space-y-3">
-            <p className="text-sm font-medium">¿Cuál de estos nombres eres tú en los chats?</p>
-            <p className="text-xs text-zinc-500">Solo hace falta la primera vez. Tus mensajes no se guardan.</p>
+            <p className="text-sm font-medium">¿Quién es el dueño (el que recibe los reportes) en estos chats?</p>
+            <p className="text-xs text-zinc-500">
+              El resto de personas se tratan como repartidores. Los mensajes del dueño no se guardan.
+            </p>
             <div className="flex flex-wrap gap-2">
               {analisis.remitentesPosibles.map((r) => (
-                <Boton key={r} variante="secundario" onClick={() => analizar(r)} cargando={ocupado}>
+                <Boton
+                  key={r}
+                  variante={r === analisis.dueno ? 'principal' : 'secundario'}
+                  onClick={() => {
+                    setCambiandoDueno(false)
+                    if (r !== analisis.dueno) analizar(r)
+                  }}
+                  cargando={ocupado}
+                >
                   {r}
                 </Boton>
               ))}
             </div>
+            {cambiandoDueno && (
+              <Boton variante="fantasma" onClick={() => setCambiandoDueno(false)}>
+                Cancelar
+              </Boton>
+            )}
           </Tarjeta>
         )}
 
-        {avisos.length > 0 && !sinDueno && (
+        {avisos.length > 0 && !elegirDueno && (
           <Aviso tipo="atencion">
             <ul className="space-y-1">
               {avisos.map((a) => (
@@ -308,7 +330,7 @@ export default function SubirChats() {
           )
         })}
 
-        {!hayAlgo && !sinDueno && <Aviso>No se ha encontrado ningún repartidor en estos archivos.</Aviso>}
+        {!hayAlgo && !elegirDueno && <Aviso>No se ha encontrado ningún repartidor en estos archivos.</Aviso>}
         {error && <Aviso tipo="error">{error}</Aviso>}
 
         <div className="flex flex-col-reverse gap-2 sm:flex-row">
