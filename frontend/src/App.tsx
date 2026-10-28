@@ -1,6 +1,7 @@
 import { Navigate, NavLink, Outlet, Route, Routes } from 'react-router-dom'
 import Login from './paginas/Login'
 import Repartidores from './paginas/Repartidores'
+import Resumen from './paginas/Resumen'
 import SubirChats from './paginas/SubirChats'
 import { useSesion } from './sesion'
 
@@ -18,6 +19,7 @@ function Logo() {
 
 const enlaces = [
   { a: '/', texto: 'Subir chats', icono: 'M12 16V4m0 0L7 9m5-5 5 5M4 20h16' },
+  { a: '/resumen', texto: 'Resumen', icono: 'M4 19V9m6 10V5m6 14v-7m4 7H2' },
   { a: '/repartidores', texto: 'Repartidores', icono: 'M16 11a4 4 0 1 0-8 0 4 4 0 0 0 8 0Zm-12 9a8 8 0 0 1 16 0' },
 ]
 
@@ -74,7 +76,7 @@ function Marco() {
       </main>
 
       {/* Navegación inferior en móvil */}
-      <nav className="fixed inset-x-0 bottom-0 z-10 grid grid-cols-2 border-t border-zinc-200 bg-white pb-[env(safe-area-inset-bottom)] sm:hidden">
+      <nav className="fixed inset-x-0 bottom-0 z-10 grid grid-cols-3 border-t border-zinc-200 bg-white pb-[env(safe-area-inset-bottom)] sm:hidden">
         {enlaces.map((e) => (
           <NavLink
             key={e.a}
@@ -99,6 +101,7 @@ export default function App() {
       <Route path="/login" element={<Login />} />
       <Route element={<Marco />}>
         <Route path="/" element={<SubirChats />} />
+        <Route path="/resumen" element={<Resumen />} />
         <Route path="/repartidores" element={<Repartidores />} />
       </Route>
       <Route path="*" element={<Navigate to="/" replace />} />

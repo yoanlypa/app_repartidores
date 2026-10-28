@@ -191,7 +191,7 @@ Además, ajustes manuales por mes (concepto + importe positivo o negativo: adela
 ## 11. Fases
 
 1. **Base + lector de chats + login + subida:** proyecto, base de datos, lector con tests, login, subida de chats y alta automática de repartidores. Sin IA todavía. ✅ (28/10/2026)
-2. **IA + validaciones:** extracción con IA, validaciones y un script de consola para probar con un `.txt` real (`npm run probar -- chat.txt`).
+2. **IA + validaciones:** extracción con IA, validaciones, resumen del mes por repartidor y corrección manual de días. ✅ (28/10/2026)
 3. **Interfaz:** subida de archivos, gestión de repartidores y tarifas, pantalla de revisión.
 4. **Pago, exportación y cierre:** cálculo del pago, Excel, PDF y cierre de mes.
 5. **Producción:** despliegue en el VPS con Coolify (ver `DEPLOY.md`) y datos de demostración para enseñarle la app al cliente.
@@ -250,3 +250,8 @@ Además, ajustes manuales por mes (concepto + importe positivo o negativo: adela
 - **28/10/2026:** sesiones guardadas en la tabla `sesiones` (token aleatorio en cookie httpOnly, 30 días). Más simple que JWT y se pueden revocar.
 - **28/10/2026:** el archivo original no se guarda. Solo se guardan los mensajes **del repartidor** (no los del dueño), deduplicados, en la tabla `mensajes`, para poder procesar cualquier mes en la fase 2. Se pueden borrar al cerrar el mes si se quiere.
 - **28/10/2026:** el dueño se detecta como el remitente común a todos los archivos subidos (si hay 2+ archivos) o se elige en pantalla; se guarda en `empresas.nombre_dueno_whatsapp`.
+- **28/10/2026:** modelo por defecto `claude-haiku-5-5` (configurable con `ANTHROPIC_MODEL`). Tool use forzado + validación con zod y un reintento.
+- **28/10/2026:** al guardar chats se procesan automáticamente con IA los 3 meses más recientes con mensajes nuevos; el resto, desde Resumen ("Leer con IA").
+- **28/10/2026:** a la IA se le envían los mensajes del mes más la madrugada (hasta las 06:00) del día 1 del mes siguiente, para los "ayer salí con...".
+- **28/10/2026:** los días dudosos con datos completos suman en los totales; los días con error (vuelta > salida) no suman hasta corregirlos.
+- **28/10/2026:** los días sin reporte se cuentan hasta la fecha del último mensaje subido de la empresa en ese mes (≈ fecha de exportación).

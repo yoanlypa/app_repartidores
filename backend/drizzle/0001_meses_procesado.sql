@@ -1,0 +1,1 @@
+ALTER TABLE "meses" ADD COLUMN "procesado" timestamp with time zone;

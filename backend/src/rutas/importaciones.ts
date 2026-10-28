@@ -150,6 +150,7 @@ export const rutasImportaciones: FastifyPluginAsync<{ db: Db }> = async (app, { 
       let mensajesNuevos = 0;
       let mensajesRepetidos = 0;
       const nombres: string[] = [];
+      const mesesAfectados = new Set<string>();
 
       for (const dec of entrada.data.decisiones) {
         const det = porClave.get(dec.clave);
@@ -190,8 +191,9 @@ export const rutasImportaciones: FastifyPluginAsync<{ db: Db }> = async (app, { 
             .insert(mensajes)
             .values(lote)
             .onConflictDoNothing({ target: [mensajes.repartidorId, mensajes.huella] })
-            .returning({ id: mensajes.id });
+            .returning({ fechaHora: mensajes.fechaHora });
           mensajesNuevos += insertados.length;
+          for (const m of insertados) mesesAfectados.add(m.fechaHora.slice(0, 7));
           mensajesRepetidos += lote.length - insertados.length;
         }
       }
@@ -205,7 +207,7 @@ export const rutasImportaciones: FastifyPluginAsync<{ db: Db }> = async (app, { 
         .update(importaciones)
         .set({ estado: 'confirmada', datosPendientes: null, resultado: res })
         .where(eq(importaciones.id, imp.id));
-      return res;
+      return { ...res, mesesAfectados: [...mesesAfectados].sort().reverse() };
     });
 
     return { ok: true, ...resultado };

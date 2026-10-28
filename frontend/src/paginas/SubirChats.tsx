@@ -1,8 +1,10 @@
 import { useRef, useState, type DragEvent } from 'react'
-import { Link } from 'react-router-dom'
-import { api, fechaCorta, type Analisis, type Decision, type Detectado, type ResultadoImportacion } from '../api'
+import { Link, useNavigate } from 'react-router-dom'
+import { api, fechaCorta, nombreMes, type Analisis, type Decision, type Detectado, type ResultadoImportacion } from '../api'
 import { useSesion } from '../sesion'
 import { Aviso, Boton, campo, claseBoton, Tarjeta } from '../ui'
+
+const MAX_MESES_AUTO = 3
 
 type Eleccion = { accion: 'crear'; nombre: string } | { accion: 'unir'; repartidorId: number } | { accion: 'descartar' }
 
@@ -30,6 +32,9 @@ function ComoExportar() {
 
 export default function SubirChats() {
   const { recargar } = useSesion()
+  const navegar = useNavigate()
+  const [leyendo, setLeyendo] = useState<string | null>(null)
+  const [erroresIa, setErroresIa] = useState<string[]>([])
   const input = useRef<HTMLInputElement>(null)
   const [archivos, setArchivos] = useState<File[]>([])
   const [arrastrando, setArrastrando] = useState(false)
@@ -82,8 +87,10 @@ export default function SubirChats() {
         if (e.accion === 'unir') return { clave: d.clave, accion: 'unir', repartidorId: e.repartidorId }
         return { clave: d.clave, accion: 'descartar' }
       })
-      setResultado(await api.confirmar(analisis.importacionId, decisiones))
+      const res = await api.confirmar(analisis.importacionId, decisiones)
+      setResultado(res)
       recargar()
+      await leerConIa(res.mesesAfectados)
     } catch (e) {
       setError((e as Error).message)
     } finally {
@@ -91,12 +98,49 @@ export default function SubirChats() {
     }
   }
 
+  /** La IA lee los meses con mensajes nuevos (como mucho los 3 más recientes) y vamos al resumen. */
+  async function leerConIa(mesesAfectados: string[]) {
+    const meses = mesesAfectados.slice(0, MAX_MESES_AUTO)
+    if (meses.length === 0) return
+    const fallos: string[] = []
+    for (const mes of meses) {
+      setLeyendo(nombreMes(mes))
+      try {
+        const r = await api.procesar(mes)
+        fallos.push(...r.errores.map((e) => `${e.repartidor}: ${e.error}`))
+      } catch (e) {
+        fallos.push((e as Error).message)
+        break
+      }
+    }
+    setLeyendo(null)
+    if (fallos.length === 0) navegar(`/resumen?mes=${meses[0]}`)
+    else setErroresIa([...new Set(fallos)])
+  }
+
   async function empezarDeNuevo() {
     if (analisis && !resultado) await api.cancelar(analisis.importacionId).catch(() => {})
     setArchivos([])
     setAnalisis(null)
     setResultado(null)
+    setErroresIa([])
     setError('')
+  }
+
+  // --- La IA está leyendo ---
+  if (leyendo) {
+    return (
+      <div className="grid min-h-[60dvh] place-items-center text-center">
+        <div className="space-y-4">
+          <span className="mx-auto block size-10 animate-spin rounded-full border-4 border-zinc-200 border-t-zinc-900" />
+          <div>
+            <p className="text-lg font-semibold">La IA está leyendo los mensajes…</p>
+            <p className="mt-1 text-sm capitalize text-zinc-500">{leyendo}</p>
+          </div>
+          <p className="text-xs text-zinc-400">Suele tardar menos de un minuto.</p>
+        </div>
+      </div>
+    )
   }
 
   // --- Paso 3: resultado ---
@@ -114,9 +158,24 @@ export default function SubirChats() {
               Repartidores nuevos: <b>{resultado.repartidores.join(', ')}</b>
             </p>
           )}
+          {erroresIa.length > 0 && (
+            <Aviso tipo="atencion">
+              <p className="font-medium">No se pudieron leer algunos mensajes con la IA:</p>
+              <ul className="mt-1 list-disc pl-5">
+                {erroresIa.map((e) => (
+                  <li key={e}>{e}</li>
+                ))}
+              </ul>
+            </Aviso>
+          )}
+          {resultado.mesesAfectados.length > MAX_MESES_AUTO && (
+            <p className="text-xs text-zinc-500">
+              Se han leído los {MAX_MESES_AUTO} meses más recientes. Los anteriores puedes leerlos desde Resumen.
+            </p>
+          )}
           <div className="flex flex-col gap-2 sm:flex-row">
-            <Link to="/repartidores" className={`${claseBoton()} sm:flex-1`}>
-              Ver repartidores
+            <Link to={`/resumen${resultado.mesesAfectados[0] ? `?mes=${resultado.mesesAfectados[0]}` : ''}`} className={`${claseBoton()} sm:flex-1`}>
+              Ver resumen
             </Link>
             <Boton variante="secundario" onClick={empezarDeNuevo} className="sm:flex-1">
               Subir más chats

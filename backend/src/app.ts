@@ -6,7 +6,9 @@ import Fastify from 'fastify';
 import { usuarioDeToken, COOKIE_SESION } from './auth.js';
 import type { Db } from './db/index.js';
 import { rutasAuth } from './rutas/auth.js';
+import type { Extractor } from './ia/extraer.js';
 import { rutasImportaciones } from './rutas/importaciones.js';
+import { rutasMeses } from './rutas/meses.js';
 import { rutasRepartidores } from './rutas/repartidores.js';
 
 export interface OpcionesApp {
@@ -16,6 +18,8 @@ export interface OpcionesApp {
   /** Cookie Secure (true en producción con HTTPS). */
   cookieSegura: boolean;
   logger?: boolean;
+  /** Extractor de IA (null si no hay clave configurada). */
+  extractor?: Extractor | null;
 }
 
 export const MAX_MB_ARCHIVO = 20;
@@ -56,6 +60,7 @@ export async function crearApp(op: OpcionesApp) {
   await app.register(rutasAuth, { db: op.db, cookieSegura: op.cookieSegura });
   await app.register(rutasRepartidores, { db: op.db });
   await app.register(rutasImportaciones, { db: op.db });
+  await app.register(rutasMeses, { db: op.db, extractor: op.extractor ?? null });
 
   return app;
 }

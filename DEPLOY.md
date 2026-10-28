@@ -32,6 +32,7 @@ Crea dos registros **A** que apunten a la IP de tu VPS:
    DATABASE_URL=<la URL interna del paso 2>
    CORS_ORIGIN=https://repartos.yoapro.site
    NODE_ENV=production
+   ANTHROPIC_API_KEY=sk-ant-...   (la clave de la IA; sin ella la app funciona pero no lee los mensajes)
    ```
 5. **Deploy.** Las tablas se crean solas al arrancar.
 6. Comprueba: `https://api.yoapro.site/api/salud` debe devolver `{"ok":true}`.

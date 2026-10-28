@@ -113,6 +113,8 @@ export const meses = pgTable(
     /** "AAAA-MM" */
     mes: text('mes').notNull(),
     estado: text('estado', { enum: ['abierto', 'cerrado'] }).notNull().default('abierto'),
+    /** Última vez que la IA procesó este mes. */
+    procesado: timestamp('procesado', { withTimezone: true }),
   },
   (t) => [uniqueIndex('meses_empresa_mes_idx').on(t.empresaId, t.mes)],
 );
