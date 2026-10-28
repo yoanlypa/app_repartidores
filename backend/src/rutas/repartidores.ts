@@ -93,6 +93,19 @@ export const rutasRepartidores: FastifyPluginAsync<{ db: Db }> = async (app, { d
     return { ok: true };
   });
 
+  /**
+   * Eliminar un repartidor creado por error (por ejemplo el propio dueño). Borra también sus
+   * mensajes y días. Para alguien que deja de trabajar es mejor darlo de baja.
+   */
+  app.delete<{ Params: { id: string } }>('/api/repartidores/:id', async (req, reply) => {
+    const [r] = await db
+      .delete(repartidores)
+      .where(and(eq(repartidores.id, Number(req.params.id)), eq(repartidores.empresaId, empresaDe(req))))
+      .returning({ id: repartidores.id });
+    if (!r) return reply.code(404).send({ error: 'Repartidor no encontrado.' });
+    return { ok: true };
+  });
+
   app.get<{ Params: { id: string }; Querystring: { mes?: string } }>(
     '/api/repartidores/:id/mensajes',
     async (req, reply) => {

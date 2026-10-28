@@ -202,6 +202,12 @@ describe('API de meses', () => {
     await app.inject({ method: 'PATCH', url: `/api/repartidores/${luis.id}`, headers: { cookie }, payload: { mostrarEnResumen: false } });
     t = (await app.inject({ method: 'GET', url: '/api/meses/2026-10', headers: { cookie } })).json();
     expect(t.repartidores.find((r: { id: number }) => r.id === luis.id).mostrarEnResumen).toBe(false);
+
+    // Eliminarlo (creado por error) borra también sus días.
+    const del = await app.inject({ method: 'DELETE', url: `/api/repartidores/${luis.id}`, headers: { cookie } });
+    expect(del.statusCode).toBe(200);
+    t = (await app.inject({ method: 'GET', url: '/api/meses/2026-10', headers: { cookie } })).json();
+    expect(t.repartidores.some((r: { id: number }) => r.id === luis.id)).toBe(false);
   });
 
   it('lista los meses con mensajes', async () => {

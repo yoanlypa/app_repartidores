@@ -159,6 +159,7 @@ export const api = {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ salida, entregados }),
     }),
+  eliminarRepartidor: (id: number) => llamar<{ ok: true }>(`/api/repartidores/${id}`, { method: 'DELETE' }),
   crearRepartidor: (nombre: string, tarifaPaquete: number | null) =>
     llamar<{ ok: true; id: number }>('/api/repartidores', json({ nombre, tarifaPaquete })),
   apuntarDia: (datos: { repartidorId: number; fecha: string; salida: number | null; entregados: number | null; nota?: string }) =>

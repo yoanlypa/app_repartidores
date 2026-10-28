@@ -143,7 +143,7 @@ function Tabla({ datos, reps, dias, porDia, abrir }: { datos: ResumenMes; reps: 
               <span className="block text-[10px] font-normal text-zinc-400">{datos.mes.slice(0, 4)}</span>
             </th>
             {reps.map((r) => (
-              <th key={r.id} className={`${thBase} w-[4.75rem] max-w-[4.75rem] text-center`} title={r.nombre}>
+              <th key={r.id} className={`${thBase} w-[5.25rem] max-w-[5.25rem] text-center text-[13px]`} title={r.nombre}>
                 <span className="line-clamp-2 break-words leading-tight">{r.nombre}</span>
               </th>
             ))}
@@ -168,12 +168,12 @@ function Tabla({ datos, reps, dias, porDia, abrir }: { datos: ResumenMes; reps: 
                   return (
                     <td key={r.id} className="h-px border-b border-r border-zinc-100 p-0 text-center">
                       <button
-                        className={`relative flex h-full min-h-11 w-full items-center justify-center tabular-nums transition ${d ? fondoCelda[d.estado] : 'hover:bg-zinc-50'} ${editable ? '' : 'cursor-default'}`}
+                        className={`relative flex h-full min-h-12 w-full items-center justify-center tabular-nums transition ${d ? fondoCelda[d.estado] : 'hover:bg-zinc-50'} ${editable ? '' : 'cursor-default'}`}
                         onClick={() => (editable || d) && abrir({ rep: r, fecha: f, dia: d })}
                         aria-label={`${r.nombre} ${diaSemana(f)}: ${d?.entregados ?? 'sin datos'}`}
                       >
                         {d ? (
-                          <span className={`text-[15px] font-bold ${d.entregados === null ? 'text-amber-700' : ''}`}>{d.entregados ?? '?'}</span>
+                          <span className={`text-[17px] font-bold ${d.entregados === null ? 'text-amber-700' : ''}`}>{d.entregados ?? '?'}</span>
                         ) : (
                           <span className="text-zinc-300">·</span>
                         )}
@@ -241,6 +241,287 @@ function Tabla({ datos, reps, dias, porDia, abrir }: { datos: ResumenMes; reps: 
   )
 }
 
+const SEMANA = ['L', 'M', 'X', 'J', 'V', 'S', 'D']
+const hoyIso = () => new Date().toLocaleDateString('sv-SE', { timeZone: 'Europe/Madrid' })
+
+/** Hoja con todos los repartidores de un día (vista "Todos"). */
+function DiaTodos({
+  fecha,
+  reps,
+  porDia,
+  editable,
+  cerrar,
+  abrir,
+}: {
+  fecha: string
+  reps: Rep[]
+  porDia: Map<string, Map<number, DiaMes>>
+  editable: boolean
+  cerrar: () => void
+  abrir: (s: Seleccion) => void
+}) {
+  const [a, m, d] = fecha.split('-')
+  const total = reps.reduce((t, r) => t + (porDia.get(fecha)?.get(r.id)?.entregados ?? 0), 0)
+  return (
+    <div className="fixed inset-0 z-40 flex items-end justify-center bg-black/40 sm:items-center" onClick={cerrar}>
+      <div
+        className="max-h-[85dvh] w-full max-w-md overflow-auto rounded-t-3xl bg-white p-5 pb-[max(1.25rem,env(safe-area-inset-bottom))] shadow-2xl sm:rounded-3xl"
+        onClick={(e) => e.stopPropagation()}
+        role="dialog"
+      >
+        <div className="mb-3 flex items-start justify-between">
+          <div>
+            <h2 className="text-lg font-bold capitalize">{diaSemana(fecha)}</h2>
+            <p className="text-sm text-zinc-500">
+              {d}/{m}/{a} · {total} entregados
+            </p>
+          </div>
+          <button onClick={cerrar} className="rounded-full p-2 text-zinc-500 hover:bg-zinc-100" aria-label="Cerrar">
+            <svg viewBox="0 0 24 24" className="size-5" fill="none" stroke="currentColor" strokeWidth={2}>
+              <path d="M6 6l12 12M18 6 6 18" />
+            </svg>
+          </button>
+        </div>
+        <ul className="divide-y divide-zinc-100">
+          {reps.map((r) => {
+            const dia = porDia.get(fecha)?.get(r.id) ?? null
+            return (
+              <li key={r.id}>
+                <button
+                  className="flex w-full items-center gap-3 py-3 text-left"
+                  onClick={() => {
+                    if (!editable && !dia) return
+                    cerrar()
+                    abrir({ rep: r, fecha, dia })
+                  }}
+                >
+                  <span className="min-w-0 flex-1">
+                    <span className="block truncate font-medium">{r.nombre}</span>
+                    {dia?.mensajeOriginal && <span className="block truncate text-xs italic text-zinc-500">“{dia.mensajeOriginal}”</span>}
+                  </span>
+                  <span
+                    className={`grid h-11 min-w-14 place-items-center rounded-xl px-2 text-lg font-bold tabular-nums ${
+                      !dia ? 'bg-zinc-100 text-zinc-300' : dia.estado === 'error' ? 'bg-red-100' : dia.estado === 'dudoso' ? 'bg-amber-100' : 'bg-zinc-100'
+                    }`}
+                  >
+                    {dia ? (dia.entregados ?? '?') : '·'}
+                  </span>
+                </button>
+              </li>
+            )
+          })}
+        </ul>
+      </div>
+    </div>
+  )
+}
+
+/** Vista calendario (pensada para el móvil): un repartidor o todos, el mes en cuadrícula. */
+function Calendario({
+  datos,
+  reps,
+  porDia,
+  abrir,
+}: {
+  datos: ResumenMes
+  reps: Rep[]
+  porDia: Map<string, Map<number, DiaMes>>
+  abrir: (s: Seleccion) => void
+}) {
+  const [elegido, setElegido] = useState<number | 'todos'>(() => (reps.length === 1 ? reps[0].id : 'todos'))
+  const [diaTodos, setDiaTodos] = useState<string | null>(null)
+  const editable = datos.estado !== 'cerrado'
+  const rep = elegido === 'todos' ? null : (reps.find((r) => r.id === elegido) ?? null)
+  const visibles = rep ? [rep] : reps
+  const hoy = hoyIso()
+
+  useEffect(() => {
+    if (elegido !== 'todos' && !reps.some((r) => r.id === elegido)) setElegido('todos')
+  }, [reps, elegido])
+
+  // Cuadrícula L–S (y domingo solo si alguien trabajó algún domingo).
+  const [a, m] = datos.mes.split('-').map(Number)
+  const conDomingo = visibles.some((r) => r.dias.some((d) => new Date(d.fecha + 'T12:00:00Z').getUTCDay() === 0))
+  const columnas = conDomingo ? 7 : 6
+  const celdas: (string | null)[] = []
+  const primero = new Date(Date.UTC(a, m - 1, 1))
+  const desfase = (primero.getUTCDay() + 6) % 7 // lunes = 0
+  for (let i = 0; i < desfase && i < columnas; i++) celdas.push(null)
+  for (let d = 1; d <= 31; d++) {
+    const f = new Date(Date.UTC(a, m - 1, d))
+    if (f.getUTCMonth() !== m - 1) break
+    if (!conDomingo && f.getUTCDay() === 0) continue
+    celdas.push(f.toISOString().slice(0, 10))
+  }
+  while (celdas.length % columnas) celdas.push(null)
+
+  const valor = (f: string) => {
+    if (rep) return porDia.get(f)?.get(rep.id) ?? null
+    const ds = reps.map((r) => porDia.get(f)?.get(r.id)).filter((x): x is DiaMes => Boolean(x))
+    if (!ds.length) return null
+    const estado: DiaMes['estado'] = ds.some((x) => x.estado === 'error') ? 'error' : ds.some((x) => x.estado === 'dudoso') ? 'dudoso' : 'ok'
+    return { entregados: ds.reduce((t, x) => t + (x.entregados ?? 0), 0), estado, editadoManual: false } as Pick<DiaMes, 'entregados' | 'estado' | 'editadoManual'>
+  }
+
+  const tot = {
+    entregados: visibles.reduce((t, r) => t + r.totales.entregados, 0),
+    salida: visibles.reduce((t, r) => t + r.totales.salida, 0),
+    incidencias: visibles.reduce((t, r) => t + r.totales.incidencias, 0),
+    dias: visibles.reduce((t, r) => t + r.totales.diasTrabajados, 0),
+    pago: visibles.reduce((t, r) => t + r.pagoCentimos, 0),
+  }
+
+  const notas = visibles
+    .flatMap((r) => r.dias.filter((d) => d.mensajeOriginal || d.nota || d.estado !== 'ok').map((d) => ({ r, d })))
+    .sort((x, y) => x.d.fecha.localeCompare(y.d.fecha))
+
+  return (
+    <div className="space-y-3">
+      {/* Selector de repartidor, como las pestañas de una agenda */}
+      <div className="-mx-3 flex gap-2 overflow-x-auto px-3 pb-1 [scrollbar-width:none]">
+        {reps.length > 1 && (
+          <button
+            onClick={() => setElegido('todos')}
+            className={`shrink-0 rounded-full px-4 py-2 text-sm font-semibold transition ${elegido === 'todos' ? 'bg-zinc-900 text-white' : 'bg-white text-zinc-700 ring-1 ring-zinc-300'}`}
+          >
+            Todos
+          </button>
+        )}
+        {reps.map((r) => (
+          <button
+            key={r.id}
+            onClick={() => setElegido(r.id)}
+            className={`shrink-0 rounded-full px-4 py-2 text-sm font-semibold transition ${elegido === r.id ? 'bg-zinc-900 text-white' : 'bg-white text-zinc-700 ring-1 ring-zinc-300'}`}
+          >
+            {r.nombre}
+            {r.totales.dudosos + r.totales.errores > 0 && <span className="ml-1.5 inline-block size-2 rounded-full bg-amber-400 align-middle" />}
+          </button>
+        ))}
+      </div>
+
+      <div className="rounded-2xl bg-white p-2 shadow-sm ring-1 ring-zinc-200 sm:p-3">
+        <div className="mb-1 grid gap-1.5" style={{ gridTemplateColumns: `repeat(${columnas}, minmax(0, 1fr))` }}>
+          {SEMANA.slice(0, columnas).map((d) => (
+            <div key={d} className="py-1 text-center text-xs font-semibold text-zinc-400">
+              {d}
+            </div>
+          ))}
+        </div>
+        <div className="grid gap-1.5" style={{ gridTemplateColumns: `repeat(${columnas}, minmax(0, 1fr))` }}>
+          {celdas.map((f, i) => {
+            if (!f) return <div key={`v${i}`} />
+            const v = valor(f)
+            const esHoy = f === hoy
+            const futuro = f > hoy
+            const fondo = !v
+              ? futuro
+                ? 'bg-transparent ring-1 ring-dashed ring-zinc-200'
+                : 'bg-zinc-50 ring-1 ring-zinc-200'
+              : v.estado === 'error'
+                ? 'bg-red-100 ring-1 ring-red-300'
+                : v.estado === 'dudoso'
+                  ? 'bg-amber-100 ring-1 ring-amber-300'
+                  : 'bg-zinc-900 text-white'
+            return (
+              <button
+                key={f}
+                onClick={() => {
+                  if (rep) {
+                    if (editable || v) abrir({ rep, fecha: f, dia: (v as DiaMes | null) ?? null })
+                  } else setDiaTodos(f)
+                }}
+                className={`relative flex aspect-[4/5] flex-col items-center justify-center rounded-xl transition active:scale-95 ${fondo} ${esHoy ? 'outline outline-2 outline-offset-1 outline-marca-osc' : ''}`}
+                aria-label={`${diaSemana(f)}: ${v ? (v.entregados ?? 'sin entregados') : 'sin datos'}`}
+              >
+                <span className={`absolute left-1.5 top-1 text-[11px] font-medium ${v && v.estado === 'ok' ? 'text-zinc-400' : 'text-zinc-500'}`}>
+                  {Number(f.slice(8))}
+                </span>
+                <span className={`mt-2 text-xl font-bold tabular-nums ${v ? (v.estado === 'ok' ? 'text-marca' : 'text-zinc-900') : 'text-zinc-300'}`}>
+                  {v ? (v.entregados ?? '?') : futuro ? '' : '·'}
+                </span>
+                {rep && v?.editadoManual && <span className="absolute right-1.5 top-1.5 size-1.5 rounded-full bg-zinc-400" />}
+              </button>
+            )
+          })}
+        </div>
+      </div>
+
+      {/* Totales de lo seleccionado */}
+      <div className="rounded-2xl bg-white p-4 shadow-sm ring-1 ring-zinc-200">
+        <div className="flex items-baseline justify-between gap-2">
+          <span className="font-semibold">{rep ? rep.nombre : 'Todos'}</span>
+          <span className="text-xs text-zinc-500">{pl(tot.dias, 'día trabajado', 'días trabajados')}</span>
+        </div>
+        <div className="mt-3 grid grid-cols-3 gap-2 text-center">
+          <div className="rounded-xl bg-zinc-100 py-2">
+            <div className="text-lg font-bold tabular-nums">{tot.salida}</div>
+            <div className="text-[11px] text-zinc-500">salida</div>
+          </div>
+          <div className="rounded-xl bg-zinc-900 py-2 text-white">
+            <div className="text-lg font-bold tabular-nums text-marca">{tot.entregados}</div>
+            <div className="text-[11px] text-zinc-400">entregados</div>
+          </div>
+          <div className="rounded-xl bg-zinc-100 py-2">
+            <div className="text-lg font-bold tabular-nums">{tot.incidencias}</div>
+            <div className="text-[11px] text-zinc-500">incidencias</div>
+          </div>
+        </div>
+        <div className="mt-2 flex items-baseline justify-between rounded-xl bg-lime-50 px-3 py-2.5 ring-1 ring-lime-200">
+          <span className="text-sm text-lime-900">
+            A pagar{rep && rep.precioCentimos > 0 && <> · {euros(rep.precioCentimos)}/paquete</>}
+          </span>
+          <span className="text-xl font-bold tabular-nums text-lime-950">{euros(tot.pago)}</span>
+        </div>
+      </div>
+
+      {/* Notas en forma de agenda */}
+      {notas.length > 0 && (
+        <div className="overflow-hidden rounded-2xl bg-white shadow-sm ring-1 ring-zinc-200">
+          <h3 className="border-b border-zinc-100 px-4 py-2.5 text-sm font-semibold">Notas</h3>
+          <ul className="divide-y divide-zinc-100">
+            {notas.map(({ r, d }) => (
+              <li key={`${r.id}-${d.fecha}`}>
+                <button className="flex w-full gap-3 px-4 py-3 text-left" onClick={() => abrir({ rep: r, fecha: d.fecha, dia: d })}>
+                  <span className="w-12 shrink-0 text-sm font-semibold capitalize leading-tight">
+                    {diaSemana(d.fecha).split(' ')[0]}
+                    <span className="block text-lg">{Number(d.fecha.slice(8))}</span>
+                  </span>
+                  <span className="min-w-0 flex-1 text-sm">
+                    {!rep && <span className="block font-semibold">{r.nombre}</span>}
+                    {d.mensajeOriginal && <span className="block italic text-zinc-600">“{d.mensajeOriginal}”</span>}
+                    {d.nota && <span className={`block ${d.estado === 'ok' ? 'text-zinc-500' : 'text-amber-800'}`}>{d.nota}</span>}
+                  </span>
+                  <span
+                    className={`grid h-9 min-w-11 shrink-0 place-items-center self-center rounded-lg px-2 font-bold tabular-nums ${
+                      d.estado === 'error' ? 'bg-red-100' : d.estado === 'dudoso' ? 'bg-amber-100' : 'bg-zinc-100'
+                    }`}
+                  >
+                    {d.entregados ?? '?'}
+                  </span>
+                </button>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+
+      {diaTodos && (
+        <DiaTodos fecha={diaTodos} reps={reps} porDia={porDia} editable={editable} cerrar={() => setDiaTodos(null)} abrir={abrir} />
+      )}
+    </div>
+  )
+}
+
+const leerVista = (): 'calendario' | 'tabla' => {
+  try {
+    const v = localStorage.getItem('vistaResumen')
+    if (v === 'calendario' || v === 'tabla') return v
+  } catch {
+    /* sin almacenamiento */
+  }
+  return window.matchMedia('(min-width: 768px)').matches ? 'tabla' : 'calendario'
+}
+
 export default function Resumen() {
   const { yo } = useSesion()
   const [params, setParams] = useSearchParams()
@@ -251,6 +532,15 @@ export default function Resumen() {
   const [generandoPdf, setGenerandoPdf] = useState(false)
   const [avisoIa, setAvisoIa] = useState<string[]>([])
   const [sel, setSel] = useState<Seleccion | null>(null)
+  const [vista, setVistaEstado] = useState(leerVista)
+  const setVista = (v: 'calendario' | 'tabla') => {
+    setVistaEstado(v)
+    try {
+      localStorage.setItem('vistaResumen', v)
+    } catch {
+      /* sin almacenamiento */
+    }
+  }
 
   const mes = params.get('mes') ?? meses?.[0] ?? null
 
@@ -273,7 +563,11 @@ export default function Resumen() {
     cargar()
   }, [cargar])
 
-  const reps = useMemo(() => datos?.repartidores.filter((r) => r.mostrarEnResumen) ?? [], [datos])
+  // Se ven los marcados para el resumen; los dados de baja solo si trabajaron ese mes.
+  const reps = useMemo(
+    () => datos?.repartidores.filter((r) => r.mostrarEnResumen && (r.activo || r.dias.length > 0)) ?? [],
+    [datos],
+  )
   const ocultos = (datos?.repartidores.length ?? 0) - reps.length
   const porDia = useMemo(() => {
     const m = new Map<string, Map<number, DiaMes>>()
@@ -383,6 +677,21 @@ export default function Resumen() {
 
       {datos && (
         <>
+          <div className="grid grid-cols-2 rounded-xl bg-zinc-200/70 p-1 text-sm font-semibold" role="tablist" aria-label="Vista">
+            {(['calendario', 'tabla'] as const).map((v) => (
+              <button
+                key={v}
+                role="tab"
+                aria-selected={vista === v}
+                onClick={() => setVista(v)}
+                className={`rounded-lg py-2 transition ${vista === v ? 'bg-white text-zinc-900 shadow-sm' : 'text-zinc-500'}`}
+              >
+                {v === 'calendario' ? 'Calendario' : 'Tabla completa'}
+              </button>
+            ))}
+          </div>
+
+          {vista === 'tabla' && (
           <div className="grid grid-cols-2 gap-2">
             <div className="rounded-2xl bg-zinc-900 px-4 py-3 text-white">
               <div className="text-2xl font-bold tabular-nums text-marca">{total.toLocaleString('es-ES')}</div>
@@ -393,6 +702,7 @@ export default function Resumen() {
               <div className="text-xs text-lime-800">a pagar en total</div>
             </div>
           </div>
+          )}
 
           {datos.precioCentimos === 0 && !reps.some((r) => r.precioPropio) && (
             <Aviso tipo="atencion">
@@ -413,7 +723,11 @@ export default function Resumen() {
               .
             </Tarjeta>
           ) : (
-            <Tabla datos={datos} reps={reps} dias={dias} porDia={porDia} abrir={setSel} />
+            vista === 'calendario' ? (
+              <Calendario datos={datos} reps={reps} porDia={porDia} abrir={setSel} />
+            ) : (
+              <Tabla datos={datos} reps={reps} dias={dias} porDia={porDia} abrir={setSel} />
+            )
           )}
 
           <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-zinc-500">
@@ -426,7 +740,7 @@ export default function Resumen() {
             <span className="flex items-center gap-1">
               <span className="size-1.5 rounded-full bg-zinc-400" /> corregido a mano
             </span>
-            <span>Toca una casilla para ver o corregir.</span>
+            <span>Toca un día para ver o corregir.</span>
           </div>
 
           {revisar > 0 && <Aviso tipo="atencion">{pl(revisar, 'casilla marcada', 'casillas marcadas')} para revisar.</Aviso>}

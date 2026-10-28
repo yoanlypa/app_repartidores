@@ -159,6 +159,23 @@ function FilaRepartidor({ r, alCambiar }: { r: Repartidor; alCambiar: () => void
     }
   }
 
+  async function eliminar() {
+    const aviso =
+      r.totalMensajes > 0
+        ? `¿Eliminar a ${r.nombre}? Se borrarán también sus ${r.totalMensajes} mensajes y sus días. Si solo ha dejado de trabajar, mejor dale de baja.`
+        : `¿Eliminar a ${r.nombre}?`
+    if (!window.confirm(aviso)) return
+    setOcupado(true)
+    setError('')
+    try {
+      await api.eliminarRepartidor(r.id)
+      alCambiar()
+    } catch (e) {
+      setError((e as Error).message)
+      setOcupado(false)
+    }
+  }
+
   const otrosNombres = r.alias.filter((a) => a !== r.nombre)
 
   return (
@@ -188,8 +205,17 @@ function FilaRepartidor({ r, alCambiar }: { r: Repartidor; alCambiar: () => void
             <Boton type="button" variante="secundario" onClick={() => setEditando(false)}>
               Cancelar
             </Boton>
-            <Boton type="button" variante={r.activo ? 'peligro' : 'secundario'} cargando={ocupado} onClick={() => guardar({ activo: !r.activo })} className="w-full">
+            <Boton
+              type="button"
+              variante="secundario"
+              cargando={ocupado}
+              onClick={() => guardar(r.activo ? { activo: false, mostrarEnResumen: false } : { activo: true, mostrarEnResumen: true })}
+              className="w-full"
+            >
               {r.activo ? 'Dar de baja (ya no trabaja)' : 'Volver a dar de alta'}
+            </Boton>
+            <Boton type="button" variante="peligro" cargando={ocupado} onClick={eliminar} className="w-full">
+              Eliminar (creado por error)
             </Boton>
           </div>
         </form>
@@ -210,8 +236,8 @@ function FilaRepartidor({ r, alCambiar }: { r: Repartidor; alCambiar: () => void
           </button>
           <div className="flex shrink-0 flex-col items-center gap-0.5">
             <Interruptor
-              activo={r.mostrarEnResumen && r.activo}
-              cargando={ocupado || !r.activo}
+              activo={r.mostrarEnResumen}
+              cargando={ocupado}
               etiqueta={`Mostrar a ${r.nombre} en el resumen`}
               onChange={(v) => guardar({ mostrarEnResumen: v })}
             />
